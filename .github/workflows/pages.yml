@@ -1,0 +1,49 @@
+name: Publish Piper to GitHub Pages
+
+on:
+  push:
+    tags: ['v*']
+
+permissions: {}
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.event.created && !github.event.deleted
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify the tagged site
+        run: |
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "The release tag must point to a commit on public main." >&2
+            exit 1
+          fi
+          mkdir _site
+          cp index.html piper.html LICENSE README.md _site/
+          python3 .github/verify-version.py "$GITHUB_REF_NAME" _site/piper.html
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy the verified site
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
